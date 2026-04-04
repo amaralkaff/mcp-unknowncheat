@@ -5,13 +5,32 @@ import { parseThread } from "../parsers/thread.js";
 import type { ThreadPost } from "../types.js";
 
 const MAX_PAGES = 50;
+const MAX_IMAGES = 10; // max images to fetch and embed per call
 
 function buildPageUrl(baseUrl: string, page: number): string {
-  // vBulletin supports both ?page=N and /pageN suffixes
-  // Prefer query string if already present, otherwise append
   const url = new URL(baseUrl);
   url.searchParams.set("page", String(page));
   return url.toString();
+}
+
+async function fetchImageAsBase64(url: string): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get("content-type") ?? "image/png";
+    const mimeType = contentType.split(";")[0].trim();
+    if (!mimeType.startsWith("image/")) return null;
+
+    const buffer = await res.arrayBuffer();
+    const data = Buffer.from(buffer).toString("base64");
+    return { data, mimeType };
+  } catch {
+    return null;
+  }
 }
 
 export function registerGetThread(server: McpServer): void {
@@ -25,48 +44,81 @@ export function registerGetThread(server: McpServer): void {
         .optional()
         .default(false)
         .describe("If true, fetches all pages of the thread (max 50 pages)"),
+      include_images: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("If true, fetches post images and returns them as viewable image content (max 10 images)"),
     },
-    async ({ url, fetch_all_pages }) => {
+    async ({ url, fetch_all_pages, include_images }) => {
       try {
         // Fetch first page
         const { html: firstHtml } = await navigateWithRetry(url);
         const firstPage = parseThread(firstHtml, url, 1);
 
-        if (!fetch_all_pages || firstPage.totalPages <= 1) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(firstPage) }],
-          };
-        }
+        let allPosts: ThreadPost[] = [...firstPage.posts];
 
-        // Accumulate all pages
-        const allPosts: ThreadPost[] = [...firstPage.posts];
-        const pagesToFetch = Math.min(firstPage.totalPages, MAX_PAGES);
+        if (fetch_all_pages && firstPage.totalPages > 1) {
+          const pagesToFetch = Math.min(firstPage.totalPages, MAX_PAGES);
 
-        for (let pageNum = 2; pageNum <= pagesToFetch; pageNum++) {
-          await new Promise((r) => setTimeout(r, 1_200)); // polite delay
+          for (let pageNum = 2; pageNum <= pagesToFetch; pageNum++) {
+            await new Promise((r) => setTimeout(r, 1_200));
 
-          const pageUrl = buildPageUrl(url, pageNum);
-          const { html } = await navigateWithRetry(pageUrl);
-          const parsed = parseThread(html, pageUrl, pageNum);
-          allPosts.push(...parsed.posts);
+            const pageUrl = buildPageUrl(url, pageNum);
+            const { html } = await navigateWithRetry(pageUrl);
+            const parsed = parseThread(html, pageUrl, pageNum);
+            allPosts.push(...parsed.posts);
 
-          console.error(`[get-thread] Fetched page ${pageNum}/${pagesToFetch}`);
+            console.error(`[get-thread] Fetched page ${pageNum}/${pagesToFetch}`);
+          }
         }
 
         const result = {
-          ...firstPage,
+          title: firstPage.title,
+          tags: firstPage.tags,
           posts: allPosts,
-          currentPage: pagesToFetch,
+          currentPage: fetch_all_pages ? Math.min(firstPage.totalPages, MAX_PAGES) : 1,
           totalPages: firstPage.totalPages,
-          note:
-            firstPage.totalPages > MAX_PAGES
-              ? `Capped at ${MAX_PAGES} pages (thread has ${firstPage.totalPages} total)`
-              : undefined,
+          url,
+          ...(fetch_all_pages && firstPage.totalPages > MAX_PAGES
+            ? { note: `Capped at ${MAX_PAGES} pages (thread has ${firstPage.totalPages} total)` }
+            : {}),
         };
 
-        return {
-          content: [{ type: "text", text: JSON.stringify(result) }],
-        };
+        // Build content array
+        const content: Array<
+          | { type: "text"; text: string }
+          | { type: "image"; data: string; mimeType: string }
+        > = [{ type: "text", text: JSON.stringify(result) }];
+
+        if (include_images) {
+          // Collect all unique image URLs from all posts
+          const seen = new Set<string>();
+          const imageUrls: string[] = [];
+
+          for (const post of allPosts) {
+            for (const imgUrl of post.images) {
+              if (!seen.has(imgUrl)) {
+                seen.add(imgUrl);
+                imageUrls.push(imgUrl);
+              }
+              if (imageUrls.length >= MAX_IMAGES) break;
+            }
+            if (imageUrls.length >= MAX_IMAGES) break;
+          }
+
+          console.error(`[get-thread] Fetching ${imageUrls.length} images...`);
+
+          for (const imgUrl of imageUrls) {
+            const img = await fetchImageAsBase64(imgUrl);
+            if (img) {
+              content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+              console.error(`[get-thread] Fetched image: ${imgUrl}`);
+            }
+          }
+        }
+
+        return { content };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return {
