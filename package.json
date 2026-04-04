@@ -1,6 +1,6 @@
 {
-  "name": "uc-mcp",
-  "version": "1.0.0",
+  "name": "uc-mcp-server",
+  "version": "0.1.0",
   "type": "module",
   "description": "MCP server for UnknownCheats forum — Cloudflare bypass, thread scraping, code extraction",
   "main": "src/index.ts",
