@@ -48,7 +48,11 @@ export function parseCodeBlocks(html: string): CodeBlock[] {
     const contextEl = element.prev();
     const context = contextEl.length ? contextEl.text().trim().slice(0, 100) : undefined;
 
-    blocks.push({ code, language, context });
+    // Find ancestor post ID (vBulletin: table[id^='post'])
+    const postAncestor = element.closest("table[id]").filter((_, el) => /^post\d+$/.test($(el).attr("id") ?? ""));
+    const postId = postAncestor.length ? postAncestor.attr("id") : undefined;
+
+    blocks.push({ code, language, context, postId });
   });
 
   return blocks;

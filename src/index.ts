@@ -1,6 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { closeBrowser } from "./browser.js";
+import { mkdir } from "node:fs/promises";
+
+// Ensure exports directory exists
+await mkdir("./exports", { recursive: true }).catch(() => {});
 import { registerCheckLogin } from "./tools/check-login.js";
 import { registerLogin } from "./tools/login.js";
 import { registerSearchForum } from "./tools/search-forum.js";

@@ -36,4 +36,5 @@ export interface CodeBlock {
   code: string;
   language: string;
   context?: string;
+  postId?: string;
 }
