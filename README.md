@@ -1,6 +1,9 @@
-# mcp-unknowncheat
+# uc-mcp-server
 
 An MCP (Model Context Protocol) server for programmatically interacting with the [UnknownCheats](https://www.unknowncheats.me) forum. Bypasses Cloudflare protection using a real Chrome instance and provides structured data extraction via Cheerio.
+
+[![npm version](https://img.shields.io/npm/v/uc-mcp-server)](https://www.npmjs.com/package/uc-mcp-server)
+[![npm downloads](https://img.shields.io/npm/dm/uc-mcp-server)](https://www.npmjs.com/package/uc-mcp-server)
 
 ## Features
 
@@ -35,6 +38,10 @@ An MCP (Model Context Protocol) server for programmatically interacting with the
 ## Installation
 
 ```bash
+# via npm
+npx uc-mcp-server
+
+# or clone
 git clone https://github.com/amaralkaff/mcp-unknowncheat.git
 cd mcp-unknowncheat
 bun install
@@ -46,6 +53,12 @@ bun install
 claude mcp add uc-mcp bun -- run "/path/to/mcp-unknowncheat/src/index.ts"
 ```
 
+Or with npx:
+
+```bash
+claude mcp add uc-mcp npx -- uc-mcp-server
+```
+
 ## Setup with Claude Desktop
 
 Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
@@ -54,8 +67,8 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
 {
   "mcpServers": {
     "uc-mcp": {
-      "command": "bun",
-      "args": ["run", "/path/to/mcp-unknowncheat/src/index.ts"]
+      "command": "npx",
+      "args": ["uc-mcp-server"]
     }
   }
 }
@@ -119,3 +132,9 @@ src/
 - All logging uses `console.error()` — `console.log()` is reserved for the MCP stdio transport
 - Thread pagination capped at 50 pages by default for `fetch_all_pages`
 - Language detection supports: C++, C#, Python, Lua
+
+## Issues
+
+Found a bug or want to request a feature? Open an issue at:
+
+https://github.com/amaralkaff/mcp-unknowncheat/issues
