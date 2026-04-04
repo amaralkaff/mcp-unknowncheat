@@ -1,20 +1,61 @@
-name: Publish to npm
+name: Bump, Tag, Release & Publish
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
-      - run: npm install
-      - run: npm publish --access public
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump patch version
+        id: bump
+        run: |
+          npm version patch --no-git-tag-version
+          VERSION=$(node -e "import('./package.json', {assert:{type:'json'}}).then(m=>process.stdout.write(m.default.version))")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit and tag
+        run: |
+          git add package.json
+          git commit -m "chore: release v${{ steps.bump.outputs.version }} [skip ci]"
+          git tag v${{ steps.bump.outputs.version }}
+          git push origin master --tags
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Publish to npm
+        run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        run: |
+          gh release create v${{ steps.bump.outputs.version }} \
+            --title "v${{ steps.bump.outputs.version }}" \
+            --generate-notes \
+            --latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
