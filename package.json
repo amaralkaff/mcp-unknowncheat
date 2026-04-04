@@ -1,7 +1,23 @@
 {
-  "name": "mcp-unknowncheat",
+  "name": "uc-mcp",
   "version": "1.0.0",
   "type": "module",
+  "description": "MCP server for UnknownCheats forum — Cloudflare bypass, thread scraping, code extraction",
+  "main": "src/index.ts",
+  "bin": {
+    "mcp-unknowncheat": "src/index.ts"
+  },
+  "keywords": ["mcp", "unknowncheats", "puppeteer", "cloudflare", "scraper", "ai"],
+  "author": "amaralkaff",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amaralkaff/mcp-unknowncheat.git"
+  },
+  "homepage": "https://github.com/amaralkaff/mcp-unknowncheat",
+  "bugs": {
+    "url": "https://github.com/amaralkaff/mcp-unknowncheat/issues"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts"
