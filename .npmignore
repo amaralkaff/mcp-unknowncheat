@@ -1,0 +1,13 @@
+# Never publish to npm
+cookies.json
+.env
+.env.*
+*.token
+*.key
+*.log
+.github/
+.playwright-mcp/
+.gitignore
+tsconfig.json
+bun.lock
+package-lock.json

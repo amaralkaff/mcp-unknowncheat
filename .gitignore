@@ -1,5 +1,12 @@
 node_modules/
 dist/
+.playwright-mcp/
+
+# Sensitive data — never commit
 cookies.json
 *.log
-.playwright-mcp/
+.env
+.env.*
+*.token
+*.key
+package-lock.json
