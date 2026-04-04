@@ -25,7 +25,6 @@ function parseThreadList(html: string) {
 
     const url = href.startsWith("http") ? href : `https://www.unknowncheats.me${href}`;
 
-    // Get reply/view counts from the same row
     const row = link.closest("tr, div[id^='threadbit']");
     const cells = row.find("td").map((_, td) => $(td).text().trim()).get();
     const nums = cells.join(" ").match(/\d+/g) ?? [];
@@ -62,27 +61,79 @@ export function registerSearchForum(server: McpServer): void {
           };
         }
 
-        // Navigate to search page and submit the form
+        // --- Keyword search via Puppeteer form submission ---
         const { page } = await navigateWithRetry(UC_SEARCH);
 
-        // Use the advanced search input (size=35)
-        const inputSelector = 'input[name="query"][size="35"]';
-        await page.waitForSelector(inputSelector, { timeout: 10_000 });
-        await page.click(inputSelector, { clickCount: 3 });
-        await page.type(inputSelector, query, { delay: 40 });
+        // Dump all input names on the page for diagnostics
+        const formInfo = await page.evaluate(() => {
+          const inputs = Array.from(document.querySelectorAll("input, textarea")).map((el) => ({
+            tag: el.tagName.toLowerCase(),
+            name: (el as HTMLInputElement).name,
+            type: (el as HTMLInputElement).type,
+            id: el.id,
+            size: (el as HTMLInputElement).size,
+          }));
+          const forms = Array.from(document.querySelectorAll("form")).map((f) => ({
+            action: f.action,
+            method: f.method,
+          }));
+          return { inputs, forms };
+        });
 
-        // Submit the form
-        await page.evaluate((sel: string) => {
-          const input = document.querySelector<HTMLInputElement>(sel);
-          const form = input?.closest("form");
-          const btn = form?.querySelector<HTMLElement>('input[type="submit"], button[type="submit"]');
-          if (btn) btn.click();
-          else form?.submit();
-        }, inputSelector);
+        console.error("[search] Form info:", JSON.stringify(formInfo));
 
-        await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30_000 });
+        // Try selectors in priority order
+        const SELECTORS = [
+          'input[name="query"][size="35"]',
+          'input[name="query"]',
+          'textarea[name="query"]',
+          '#navbar_search_field',
+          'input[type="text"][name*="search"]',
+          'input[type="text"]:not([name="searchuser"])',
+        ];
 
-        // Wait a bit for any JS rendering
+        let filled = false;
+        for (const sel of SELECTORS) {
+          try {
+            const el = await page.$(sel);
+            if (el) {
+              await page.click(sel, { clickCount: 3 });
+              await page.type(sel, query, { delay: 40 });
+              console.error(`[search] Filled input with selector: ${sel}`);
+              filled = true;
+              break;
+            }
+          } catch {
+            continue;
+          }
+        }
+
+        if (!filled) {
+          return {
+            content: [{ type: "text", text: `Error: Could not find search input. Form info: ${JSON.stringify(formInfo)}` }],
+            isError: true,
+          };
+        }
+
+        // Submit — try button click first, then Enter key, then form.submit()
+        const submitted = await page.evaluate(() => {
+          const btn = document.querySelector<HTMLElement>(
+            'input[type="submit"][value*="Search"], input[type="submit"], button[type="submit"]'
+          );
+          if (btn) { btn.click(); return "button"; }
+          const form = document.querySelector("form");
+          if (form) { form.submit(); return "form"; }
+          return null;
+        });
+
+        if (!submitted) {
+          // Fallback: press Enter
+          await page.keyboard.press("Enter");
+        }
+
+        console.error(`[search] Submitted via: ${submitted ?? "Enter key"}`);
+
+        await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {});
         await new Promise((r) => setTimeout(r, 1_500));
 
         const html = await page.content();
@@ -90,7 +141,7 @@ export function registerSearchForum(server: McpServer): void {
         const $ = load(html);
         const pageTitle = $("title").text().trim();
 
-        console.error(`[search] "${query}" → ${results.length} results on: ${pageTitle}`);
+        console.error(`[search] "${query}" → ${results.length} results, page: ${pageTitle}`);
 
         return {
           content: [{ type: "text", text: JSON.stringify({ count: results.length, pageTitle, results }) }],
