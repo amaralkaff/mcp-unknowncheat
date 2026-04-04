@@ -10,7 +10,7 @@ An MCP (Model Context Protocol) server for programmatically interacting with the
 - **Cloudflare bypass** — Uses `puppeteer-real-browser` with a headed Chrome instance to solve Turnstile challenges automatically
 - **Cookie persistence** — Session cookies saved to `cookies.json` and reused across restarts
 - **Auto-recovery** — Detects detached frame / browser crash errors and relaunches automatically
-- **5 MCP tools** — Login, search, thread reading, pagination, and code extraction
+- **6 MCP tools** — Login, search, thread reading, pagination, code extraction, and debug
 
 ## Tools
 
@@ -20,7 +20,18 @@ An MCP (Model Context Protocol) server for programmatically interacting with the
 | `login` | Auto-fill credentials and log in | `username`, `password` |
 | `search_forum` | Search UC or browse a subforum | `query`, `subforum?` |
 | `get_thread` | Fetch thread posts with pagination | `url`, `fetch_all_pages?` |
-| `extract_code` | Extract C++/C#/Python/Lua code blocks | `url` |
+| `extract_code` | Extract C++/C#/Python/Lua code blocks | `url`, `limit?`, `export_to_file?` |
+| `debug_page` | Inspect raw page structure for debugging | `url` |
+
+### extract_code details
+
+| Parameter | Default | Description |
+|---|---|---|
+| `url` | required | Thread URL |
+| `limit` | `10` (max `50`) | Max blocks to return inline |
+| `export_to_file` | `false` | Save **all** blocks to `exports/<slug>_<timestamp>.json` |
+
+When the limit is hit, the response includes `truncated: true`, `last_post_id` (so you know where to resume), and a hint on how many blocks were skipped. Each block also carries a `postId` so you can trace it back to the exact post on the page.
 
 ## Stack
 
@@ -102,8 +113,11 @@ get_thread({ url: "https://www.unknowncheats.me/forum/..." })
 # Get all pages of a thread
 get_thread({ url: "https://www.unknowncheats.me/forum/...", fetch_all_pages: true })
 
-# Extract code blocks with language detection
+# Extract code blocks (up to 10 inline)
 extract_code({ url: "https://www.unknowncheats.me/forum/..." })
+
+# Extract all code blocks and save to file
+extract_code({ url: "https://www.unknowncheats.me/forum/...", export_to_file: true })
 ```
 
 ## Project Structure
@@ -132,6 +146,7 @@ src/
 - All logging uses `console.error()` — `console.log()` is reserved for the MCP stdio transport
 - Thread pagination capped at 50 pages by default for `fetch_all_pages`
 - Language detection supports: C++, C#, Python, Lua
+- Exported files are saved to `./exports/` and are excluded from git and npm
 
 ## Issues
 
