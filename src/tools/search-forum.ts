@@ -115,25 +115,12 @@ export function registerSearchForum(server: McpServer): void {
           };
         }
 
-        // Submit — try button click first, then Enter key, then form.submit()
-        const submitted = await page.evaluate(() => {
-          const btn = document.querySelector<HTMLElement>(
-            'input[type="submit"][value*="Search"], input[type="submit"], button[type="submit"]'
-          );
-          if (btn) { btn.click(); return "button"; }
-          const form = document.querySelector("form");
-          if (form) { form.submit(); return "form"; }
-          return null;
-        });
+        // Submit — press Enter (most reliable for vBulletin search)
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {}),
+          page.keyboard.press("Enter"),
+        ]);
 
-        if (!submitted) {
-          // Fallback: press Enter
-          await page.keyboard.press("Enter");
-        }
-
-        console.error(`[search] Submitted via: ${submitted ?? "Enter key"}`);
-
-        await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {});
         await new Promise((r) => setTimeout(r, 1_500));
 
         const html = await page.content();
