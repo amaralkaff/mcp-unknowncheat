@@ -25,6 +25,15 @@
   "bugs": {
     "url": "https://github.com/amaralkaff/mcp-unknowncheat/issues"
   },
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "bun run src/index.ts",
     "dev": "bun --watch src/index.ts"
