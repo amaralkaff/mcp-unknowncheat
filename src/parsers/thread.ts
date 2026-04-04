@@ -64,7 +64,7 @@ export function parseThread(html: string, url: string, pageNum = 1): ThreadData 
     const images: string[] = [];
     contentEl.find("img[src]").each((_, img) => {
       const src = $(img).attr("src") ?? "";
-      if (src && !src.includes("clear.gif") && !src.includes("spacer")) {
+      if (src && !src.includes("clear.gif") && !src.includes("spacer") && !src.includes("wol_error") && !src.includes("statusicon")) {
         const url = src.startsWith("http") ? src : `https://www.unknowncheats.me${src}`;
         images.push(url);
       }
