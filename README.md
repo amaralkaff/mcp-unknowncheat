@@ -4,6 +4,7 @@ An MCP (Model Context Protocol) server for programmatically interacting with the
 
 [![npm version](https://img.shields.io/npm/v/uc-mcp-server)](https://www.npmjs.com/package/uc-mcp-server)
 [![npm downloads](https://img.shields.io/npm/dm/uc-mcp-server)](https://www.npmjs.com/package/uc-mcp-server)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/amaralkaff/mcp-unknowncheat/blob/master/LICENSE)
 
 ## Features
 
