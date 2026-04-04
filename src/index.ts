@@ -36,4 +36,4 @@ process.on("exit", () => closeBrowser());
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-console.error("[server] MCP UnknownCheats server started");
+console.error("[server] MCP UnknownCheats server started (uc-mcp-server)");
