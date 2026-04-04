@@ -49,8 +49,29 @@ export function parseThread(html: string, url: string, pageNum = 1): ThreadData 
     contentEl.find("div[style*='margin']").has("div.smallfont").remove();
     const content = contentEl.text().trim().replace(/\s+/g, " ");
 
+    // Extract links
+    const links: { text: string; url: string }[] = [];
+    contentEl.find("a[href]").each((_, a) => {
+      const href = $(a).attr("href") ?? "";
+      const text = $(a).text().trim();
+      if (href && !href.startsWith("#")) {
+        const url = href.startsWith("http") ? href : `https://www.unknowncheats.me${href}`;
+        links.push({ text: text || url, url });
+      }
+    });
+
+    // Extract images
+    const images: string[] = [];
+    contentEl.find("img[src]").each((_, img) => {
+      const src = $(img).attr("src") ?? "";
+      if (src && !src.includes("clear.gif") && !src.includes("spacer")) {
+        const url = src.startsWith("http") ? src : `https://www.unknowncheats.me${src}`;
+        images.push(url);
+      }
+    });
+
     if (author || content) {
-      posts.push({ author, date, content, postNumber: postId });
+      posts.push({ author, date, content, postNumber: postId, links, images });
     }
   });
 

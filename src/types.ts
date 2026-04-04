@@ -15,11 +15,18 @@ export interface SearchResult {
   snippet?: string;
 }
 
+export interface PostLink {
+  text: string;
+  url: string;
+}
+
 export interface ThreadPost {
   author: string;
   date: string;
   content: string;
   postNumber: number;
+  links: PostLink[];
+  images: string[];
   reputation?: number;
 }
 
