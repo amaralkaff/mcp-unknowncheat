@@ -144,7 +144,7 @@ export function registerDownloadFile(server: McpServer): void {
           await rm(path.join(DOWNLOADS_DIR, f), { recursive: true, force: true });
         }
 
-        const page = await getPage();
+        let page = await getPage();
 
         // Set download behavior to our downloads folder
         const client = await page.createCDPSession();
@@ -166,62 +166,51 @@ export function registerDownloadFile(server: McpServer): void {
             // Navigation may "fail" because it's a download, not a page
           });
         } else if (isDownloadsPage) {
-          // UC downloads page — navigate, then find and click the download link
-          await navigateWithRetry(url);
+          // UC downloads page — navigate, then find the "act=down&actionhash=" link
+          const navResult = await navigateWithRetry(url);
+          page = navResult.page;
 
-          // Look for the download link on the downloads page
+          // UC download links have pattern: downloads.php?do=file&id=XXXX&act=down&actionhash=YYYY
           const downloadLink = await page.evaluate(() => {
-            // UC downloads page uses "do=get" for actual file download
             const selectors = [
-              'a[href*="do=get"]',
-              'a[href*="downloads.php?do=get"]',
-              'a.download',
-              'input[type="button"][onclick*="download"]',
+              'a[href*="act=down"]',
+              'a[href*="act=down&actionhash"]',
+              'a[title*="Download"]',
               'a[href*="attachment.php"]',
             ];
             for (const sel of selectors) {
               const el = document.querySelector(sel) as HTMLAnchorElement | null;
-              if (el) return el.href || el.getAttribute("onclick") || null;
+              if (el?.href) return el.href;
             }
             return null;
           });
 
-          if (downloadLink && downloadLink.startsWith("http")) {
-            console.error(`[download] Found download link: ${downloadLink}`);
-            await page.goto(downloadLink, { waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {});
-          } else {
-            // Try clicking any download-like element
-            const clicked = await page.evaluate(() => {
-              const candidates = [
-                'a[href*="do=get"]',
-                'a[href*="download"]',
-                'input[value*="Download" i]',
-                'a.download',
-              ];
-              for (const sel of candidates) {
-                const el = document.querySelector(sel) as HTMLElement | null;
-                if (el) { el.click(); return true; }
-              }
-              return false;
+          if (downloadLink) {
+            console.error(`[download] Found UC download link: ${downloadLink}`);
+            // Navigate to the download link — this triggers the actual file download
+            await page.goto(downloadLink, { waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {
+              // Expected — download navigation doesn't resolve to a page
             });
-
-            if (!clicked) {
-              // Debug: show what links are on the page
-              const pageLinks = await page.evaluate(() => {
-                return Array.from(document.querySelectorAll("a[href]")).slice(0, 20).map(a => ({
-                  text: (a as HTMLAnchorElement).textContent?.trim().slice(0, 50),
+          } else {
+            // Debug: show what links are on the page
+            const pageLinks = await page.evaluate(() => {
+              return Array.from(document.querySelectorAll("a[href]"))
+                .filter(a => (a as HTMLAnchorElement).href.includes("download") || (a as HTMLAnchorElement).href.includes("act="))
+                .slice(0, 15)
+                .map(a => ({
+                  text: (a as HTMLAnchorElement).textContent?.trim().slice(0, 80),
                   href: (a as HTMLAnchorElement).href,
                 }));
-              });
-              return {
-                content: [{ type: "text", text: JSON.stringify({ error: "No download link found on this page", page_links_sample: pageLinks }, null, 2) }],
-                isError: true,
-              };
-            }
+            });
+            return {
+              content: [{ type: "text", text: JSON.stringify({ error: "No download link found on UC downloads page", page_links_sample: pageLinks }, null, 2) }],
+              isError: true,
+            };
           }
         } else {
           // Generic page — navigate and look for attachment/download links
-          await navigateWithRetry(url);
+          const navResult = await navigateWithRetry(url);
+          page = navResult.page;
 
           const attachmentUrl = await page.evaluate(() => {
             const link = document.querySelector('a[href*="attachment.php"]') as HTMLAnchorElement | null;
