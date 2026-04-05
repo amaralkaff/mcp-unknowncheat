@@ -9,8 +9,19 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOWNLOADS_DIR = path.join(__dirname, "..", "..", "downloads");
 const MAX_WAIT_MS = 120_000;
 const POLL_MS = 1_000;
-const MAX_FILE_PREVIEW = 8_000; // chars per file for analysis
+const MAX_FILE_PREVIEW = 50_000; // chars per file for analysis
+const MAX_TOTAL_CONTENT = 300_000; // total chars budget for all analyzed files
 const MAX_FILES_ANALYZE = 50;
+
+// Known third-party / vendored directories to skip during analysis
+const SKIP_DIRS = new Set([
+  "imgui", "imgui-master", "dear-imgui",
+  "stb", "glad", "glfw", "glew", "sdl",
+  "json", "nlohmann", "rapidjson",
+  "boost", "eigen", "glm",
+  "node_modules", ".git", "__pycache__",
+  "packages", "vendor", "third_party", "thirdparty", "3rdparty", "external", "deps", "lib",
+]);
 
 interface FileEntry {
   path: string;
@@ -48,6 +59,11 @@ function isTextFile(filePath: string): boolean {
   if (TEXT_EXTENSIONS.has(ext)) return true;
   if (["makefile", "cmakelists.txt", "dockerfile", "readme", "license", "changelog"].includes(base)) return true;
   return false;
+}
+
+function isThirdParty(filePath: string): boolean {
+  const parts = filePath.toLowerCase().split(/[\\/]/);
+  return parts.some(p => SKIP_DIRS.has(p));
 }
 
 function formatSize(bytes: number): string {
@@ -315,22 +331,37 @@ export function registerDownloadFile(server: McpServer): void {
           }
           result.extension_stats = extCounts;
 
-          // Analyze text files
+          // Analyze text files (skip third-party/vendored code)
           if (analyze) {
             const analyzed: AnalyzedFile[] = [];
-            const textFiles = fileList.filter(f => isTextFile(f.path)).slice(0, MAX_FILES_ANALYZE);
+            const allTextFiles = fileList.filter(f => isTextFile(f.path));
+            const projectFiles = allTextFiles.filter(f => !isThirdParty(f.path));
+            const skippedFiles = allTextFiles.filter(f => isThirdParty(f.path));
+            const textFiles = projectFiles.slice(0, MAX_FILES_ANALYZE);
 
+            let totalContent = 0;
             for (const f of textFiles) {
-              const fullPath = path.join(extractedDir, f.path);
-              try {
-                const raw = await readFile(fullPath, "utf-8");
+              if (totalContent >= MAX_TOTAL_CONTENT) {
                 analyzed.push({
                   path: f.path,
                   size: f.size,
                   extension: f.extension,
-                  content: raw.length > MAX_FILE_PREVIEW
-                    ? raw.slice(0, MAX_FILE_PREVIEW) + `\n... [truncated, ${raw.length} chars total]`
-                    : raw,
+                  content: `[skipped — content budget exhausted (${formatSize(MAX_TOTAL_CONTENT)} total)]`,
+                });
+                continue;
+              }
+              const fullPath = path.join(extractedDir, f.path);
+              try {
+                const raw = await readFile(fullPath, "utf-8");
+                const preview = raw.length > MAX_FILE_PREVIEW
+                  ? raw.slice(0, MAX_FILE_PREVIEW) + `\n... [truncated, ${raw.length} chars total]`
+                  : raw;
+                totalContent += preview.length;
+                analyzed.push({
+                  path: f.path,
+                  size: f.size,
+                  extension: f.extension,
+                  content: preview,
                 });
               } catch {
                 analyzed.push({
@@ -344,9 +375,15 @@ export function registerDownloadFile(server: McpServer): void {
 
             result.analyzed_files = analyzed;
             result.analyzed_count = analyzed.length;
+            result.total_content_chars = totalContent;
 
-            if (textFiles.length < fileList.filter(f => isTextFile(f.path)).length) {
-              result.analysis_note = `Showing ${textFiles.length} of ${fileList.filter(f => isTextFile(f.path)).length} text files (capped at ${MAX_FILES_ANALYZE})`;
+            if (skippedFiles.length > 0) {
+              result.skipped_third_party = skippedFiles.map(f => f.path);
+              result.skipped_note = `${skippedFiles.length} third-party/library files skipped (imgui, etc.). Only project source files are analyzed.`;
+            }
+
+            if (projectFiles.length > MAX_FILES_ANALYZE) {
+              result.analysis_note = `Showing ${textFiles.length} of ${projectFiles.length} project text files (capped at ${MAX_FILES_ANALYZE})`;
             }
           }
         } else if (analyze && isTextFile(downloadedFile)) {
