@@ -1,5 +1,6 @@
 # Never publish to npm
 exports/
+downloads/
 cookies.json
 .env
 .env.*

@@ -41,6 +41,7 @@ Each tool is a `registerXxx(server)` function. Tools:
 | `search-forum` | Subforum browse OR keyword search via Puppeteer form submission |
 | `get-thread` | Parses thread posts with pagination; supports `include_images` (fetches images as base64 MCP content blocks) and `fetch_all_pages` (cap 50 pages) |
 | `extract-code` | Extracts code blocks with language detection; supports `export_to_file` (writes all blocks to `./exports/`) and `limit` (default 10, max 50) |
+| `download-file` | Downloads UC attachments, extracts archives (zip/rar/7z), analyzes file contents |
 | `debug-page` | Returns raw selector diagnostics for reverse-engineering page structure |
 
 ### Parsers (`src/parsers/`)
@@ -66,7 +67,7 @@ The `[skip ci]` in the bump commit prevents infinite loops.
 
 ## Key constraints
 
-- `cookies.json` and `exports/` are gitignored and npmignored — never commit them.
+- `cookies.json`, `exports/`, and `downloads/` are gitignored and npmignored — never commit them.
 - UC's search requires a POST with CSRF token — keyword search goes through Puppeteer form fill, not a direct HTTP request.
 - Images in UC posts use `wol_error.gif` / `statusicon` as placeholders — these are filtered out in the thread parser.
 - `include_images: true` fetches up to 10 images per call and returns them as MCP `image` content blocks so the AI can visually read them.

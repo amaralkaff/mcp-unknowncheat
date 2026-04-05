@@ -2,6 +2,7 @@ node_modules/
 dist/
 .playwright-mcp/
 exports/
+downloads/
 
 # Sensitive data — never commit
 cookies.json

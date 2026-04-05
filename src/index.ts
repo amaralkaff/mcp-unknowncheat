@@ -11,6 +11,7 @@ import { registerSearchForum } from "./tools/search-forum.js";
 import { registerGetThread } from "./tools/get-thread.js";
 import { registerExtractCode } from "./tools/extract-code.js";
 import { registerDebugPage } from "./tools/debug-page.js";
+import { registerDownloadFile } from "./tools/download-file.js";
 
 const server = new McpServer({
   name: "unknowncheats",
@@ -24,6 +25,7 @@ registerSearchForum(server);
 registerGetThread(server);
 registerExtractCode(server);
 registerDebugPage(server);
+registerDownloadFile(server);
 
 // Graceful shutdown
 async function shutdown() {
