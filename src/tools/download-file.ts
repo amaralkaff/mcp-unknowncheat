@@ -156,19 +156,73 @@ export function registerDownloadFile(server: McpServer): void {
 
         console.error(`[download] Navigating to: ${url}`);
 
-        // Navigate to the URL - this may trigger a download or show a page with download link
-        const isDirectDownload = /attachment\.php|attachmentid=/.test(url);
+        // Detect URL type
+        const isDirectAttachment = /attachment\.php|attachmentid=/.test(url);
+        const isDownloadsPage = /downloads\.php\?do=file/.test(url);
 
-        if (isDirectDownload) {
+        if (isDirectAttachment) {
           // Direct attachment — navigate triggers download
           await page.goto(url, { waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {
             // Navigation may "fail" because it's a download, not a page
           });
-        } else {
-          // Could be a page with download links — navigate and look for attachment links
-          const { html } = await navigateWithRetry(url);
+        } else if (isDownloadsPage) {
+          // UC downloads page — navigate, then find and click the download link
+          await navigateWithRetry(url);
 
-          // Look for attachment links on the page
+          // Look for the download link on the downloads page
+          const downloadLink = await page.evaluate(() => {
+            // UC downloads page uses "do=get" for actual file download
+            const selectors = [
+              'a[href*="do=get"]',
+              'a[href*="downloads.php?do=get"]',
+              'a.download',
+              'input[type="button"][onclick*="download"]',
+              'a[href*="attachment.php"]',
+            ];
+            for (const sel of selectors) {
+              const el = document.querySelector(sel) as HTMLAnchorElement | null;
+              if (el) return el.href || el.getAttribute("onclick") || null;
+            }
+            return null;
+          });
+
+          if (downloadLink && downloadLink.startsWith("http")) {
+            console.error(`[download] Found download link: ${downloadLink}`);
+            await page.goto(downloadLink, { waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {});
+          } else {
+            // Try clicking any download-like element
+            const clicked = await page.evaluate(() => {
+              const candidates = [
+                'a[href*="do=get"]',
+                'a[href*="download"]',
+                'input[value*="Download" i]',
+                'a.download',
+              ];
+              for (const sel of candidates) {
+                const el = document.querySelector(sel) as HTMLElement | null;
+                if (el) { el.click(); return true; }
+              }
+              return false;
+            });
+
+            if (!clicked) {
+              // Debug: show what links are on the page
+              const pageLinks = await page.evaluate(() => {
+                return Array.from(document.querySelectorAll("a[href]")).slice(0, 20).map(a => ({
+                  text: (a as HTMLAnchorElement).textContent?.trim().slice(0, 50),
+                  href: (a as HTMLAnchorElement).href,
+                }));
+              });
+              return {
+                content: [{ type: "text", text: JSON.stringify({ error: "No download link found on this page", page_links_sample: pageLinks }, null, 2) }],
+                isError: true,
+              };
+            }
+          }
+        } else {
+          // Generic page — navigate and look for attachment/download links
+          await navigateWithRetry(url);
+
           const attachmentUrl = await page.evaluate(() => {
             const link = document.querySelector('a[href*="attachment.php"]') as HTMLAnchorElement | null;
             return link?.href ?? null;
@@ -178,7 +232,6 @@ export function registerDownloadFile(server: McpServer): void {
             console.error(`[download] Found attachment link: ${attachmentUrl}`);
             await page.goto(attachmentUrl, { waitUntil: "networkidle2", timeout: 30_000 }).catch(() => {});
           } else {
-            // Try clicking any download button/link
             const clicked = await page.evaluate(() => {
               const btn = document.querySelector('a[href*="do=get"], a.download, a[download]') as HTMLAnchorElement | null;
               if (btn) { btn.click(); return true; }
