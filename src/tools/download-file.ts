@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { getPage, navigateWithRetry } from "../browser.js";
+import { getPage, navigateWithRetry, validateUrl } from "../browser.js";
 import path from "path";
 import { mkdir, readdir, readFile, rm, stat } from "node:fs/promises";
 import { fileURLToPath } from "url";
@@ -66,6 +66,19 @@ function isThirdParty(filePath: string): boolean {
   return parts.some(p => SKIP_DIRS.has(p));
 }
 
+async function validateExtractedPaths(destDir: string): Promise<void> {
+  const resolvedDest = path.resolve(destDir);
+  const files = await listFilesRecursive(destDir);
+  for (const f of files) {
+    const fullPath = path.resolve(destDir, f.path);
+    if (!fullPath.startsWith(resolvedDest)) {
+      // Remove the offending file and throw
+      await rm(fullPath, { force: true }).catch(() => {});
+      throw new Error(`Zip-Slip detected: "${f.path}" escapes extraction directory`);
+    }
+  }
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -89,24 +102,22 @@ async function listFilesRecursive(dir: string, base: string = ""): Promise<FileE
 }
 
 async function extractZip(zipPath: string, destDir: string): Promise<void> {
-  // Use Bun's built-in unzip via shell
-  const proc = Bun.spawn(["tar", "-xf", zipPath, "-C", destDir], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0) {
-    // Fallback: try PowerShell Expand-Archive on Windows
-    const ps = Bun.spawn(
-      ["powershell", "-NoProfile", "-Command",
-        `Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force`],
-      { stdout: "pipe", stderr: "pipe" }
-    );
-    const psExit = await ps.exited;
-    if (psExit !== 0) {
-      const stderr = await new Response(ps.stderr).text();
-      throw new Error(`Failed to extract zip: ${stderr}`);
+  // Use PowerShell Expand-Archive (safe: args are passed as separate parameters, not interpolated)
+  const ps = Bun.spawn(
+    ["powershell", "-NoProfile", "-Command",
+      "Expand-Archive", "-Path", zipPath, "-DestinationPath", destDir, "-Force"],
+    { stdout: "pipe", stderr: "pipe" }
+  );
+  const psExit = await ps.exited;
+  if (psExit !== 0) {
+    // Fallback: try tar
+    const proc = Bun.spawn(["tar", "-xf", zipPath, "-C", destDir], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    if (exitCode !== 0) {
+      throw new Error("Failed to extract zip");
     }
   }
 }
@@ -152,6 +163,7 @@ export function registerDownloadFile(server: McpServer): void {
     },
     async ({ url, analyze }) => {
       try {
+        validateUrl(url);
         await mkdir(DOWNLOADS_DIR, { recursive: true });
 
         // Clean previous downloads
@@ -313,6 +325,9 @@ export function registerDownloadFile(server: McpServer): void {
           } else if (ext === ".7z") {
             await extract7z(downloadedPath, extractedDir);
           }
+
+          // Validate no path traversal in extracted files
+          await validateExtractedPaths(extractedDir);
 
           const fileList = await listFilesRecursive(extractedDir);
           result.extracted = true;

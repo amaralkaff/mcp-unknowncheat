@@ -9,6 +9,23 @@ const NAV_TIMEOUT = 30_000;
 const NAV_TIMEOUT_RETRY = 60_000;
 const CF_WAIT_MS = 15_000;
 
+const ALLOWED_HOSTS = new Set(["www.unknowncheats.me", "unknowncheats.me"]);
+
+export function validateUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid URL: ${url}`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(`Blocked URL scheme: ${parsed.protocol} — only http/https allowed`);
+  }
+  if (!ALLOWED_HOSTS.has(parsed.hostname)) {
+    throw new Error(`Blocked URL host: ${parsed.hostname} — only unknowncheats.me is allowed`);
+  }
+}
+
 type BrowserInstance = {
   browser: Awaited<ReturnType<typeof connect>>["browser"];
   page: Awaited<ReturnType<typeof connect>>["page"];
@@ -45,7 +62,7 @@ async function launchBrowser(): Promise<BrowserInstance> {
   const { browser, page } = await connect({
     headless: false,
     turnstile: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [],
     customConfig: {},
     connectOption: {
       defaultViewport: null,
@@ -98,6 +115,7 @@ function isDetachedError(err: unknown): boolean {
 }
 
 export async function navigateWithRetry(url: string): Promise<{ page: BrowserInstance["page"]; html: string }> {
+  validateUrl(url);
   let page = await getPage();
   let retried = false;
 
