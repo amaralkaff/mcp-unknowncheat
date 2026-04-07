@@ -99,12 +99,10 @@ export function registerSearchForum(server: McpServer): void {
         // Navigate to advanced search page to get CSRF token
         const { page } = await navigateWithRetry("https://www.unknowncheats.me/forum/search.php");
 
-        // Fill the advanced search form using the main form (not navbar)
+        // Fill the advanced search form (id="searchform"), NOT the navbar quick search
         const submitted = await page.evaluate((opts) => {
-          // Find the advanced search form (action contains "do=process")
-          const forms = Array.from(document.querySelectorAll("form"));
-          const searchForm = forms.find(f => f.action.includes("do=process"));
-          if (!searchForm) return { ok: false, error: "Advanced search form not found" };
+          const searchForm = document.getElementById("searchform") as HTMLFormElement | null;
+          if (!searchForm) return { ok: false, error: "Advanced search form (#searchform) not found" };
 
           // Fill query — use the large input (size=35)
           const queryInput = searchForm.querySelector('input[name="query"][size="35"]') as HTMLInputElement
