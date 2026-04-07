@@ -112,10 +112,10 @@ export function registerSearchForum(server: McpServer): void {
           if (!queryInput) return { ok: false, error: "Query input not found in form" };
           queryInput.value = opts.query;
 
-          // Title only checkbox
-          const titleOnlyCheckbox = searchForm.querySelector('input[name="titleonly"]') as HTMLInputElement;
-          if (titleOnlyCheckbox) {
-            titleOnlyCheckbox.checked = opts.titleOnly;
+          // Title only — it's a <select> dropdown, not a checkbox
+          const titleOnlySelect = searchForm.querySelector('select[name="titleonly"]') as HTMLSelectElement;
+          if (titleOnlySelect) {
+            titleOnlySelect.value = opts.titleOnly ? "1" : "0";
           }
 
           // Show threads (not posts) — radio value="0"
